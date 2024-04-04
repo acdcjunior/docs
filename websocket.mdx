@@ -1,0 +1,108 @@
+---
+title: Websocket API Documentation
+description: 'Enhance your app with our audio-in, audio-out API, enabling seamless, natural conversations with your PlayAI
+agent. Transform your user experience with the power of voice.'
+---
+
+# Establishing a Connection
+
+To initiate a conversation, establish a websocket connection to the following URL, including the `agentId` as a query parameter:
+
+```text
+wss://api.play.ai/v1/agent-conversation?agentId=<your_agent_id>
+```
+
+# Initial Setup Message
+
+Upon establishing the connection, the first message sent must be a "setup" message. This message should include your API key and conform to the `AgentAPISetupMessage` type, defined as follows in TypeScript:
+
+```typescript
+type AgentAPISetupMessage = {
+  type: 'setup';
+  apiKey: string;
+  enableVad?: boolean;
+  outputFormat?: 'raw' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'mulaw';
+  outputSampleRate?: number;
+};
+```
+
+The API key provided has to belong to the creator of the agent specified.
+
+The default values for the setup message fields when not specified are:
+
+- `enableVad`: false
+- `outputFormat`: 'mulaw'
+- `outputSampleRate`: 24000
+
+# Sending Audio Input
+
+After the setup, you can send audio input in the form of a `audioIn` message. The audio must be µ-law (mu-law) encoded at 16000Hz and sent as base64 encoded string. The message format is:
+
+```json
+{ "type": "audioIn", "data": "<base64Data>" }
+```
+
+## Sample Code for Sending Audio
+
+```javascript
+const mulawData = ...
+// mulawData contains audio binary and ws is your WebSocket connection
+const base64Data = btoa(String.fromCharCode.apply(null, mulawData));
+ws.send(JSON.stringify({ type: 'audioIn', data: base64Data }));
+```
+
+# Receiving Audio Output
+
+Audio output from the server will be received in an `audioStream` message. The message format is:
+
+```json
+{ "type": "audioStream", "data": "<base64Data>" }
+```
+
+The `data` field contains base64 encoded audio binary in the selected `outputFormat`.
+
+## Sample Code for Receiving Audio
+
+```javascript
+const base64Data = eventData.data;
+const audioData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+// audioData is ready to be appended to the player buffer
+player.appendAudioData(audioData);
+```
+
+# Handling New Audio Streams
+
+A `newAudioStream` message indicates the start of a new response. It is recommended to clear your player buffer and start playing the new stream content upon receiving this message. This message contains no additional fields.
+
+# Error Handling
+
+Errors from the server are sent as `error` message type, a numeric code and a message in the following format:
+
+```json
+{ "type": "error", "code": <errorCode>, "message": "<errorMessage>" }
+```
+
+The table below provides a quick reference to the various error codes and their corresponding messages for the Agent Websocket API.
+
+| Error Code | Error Message                                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1001       | Invalid authorization token.                                                                                                                                                              |
+| 1002       | Invalid agent id.                                                                                                                                                                         |
+| 1005       | Not enough credits.                                                                                                                                                                       |
+| 2001       | No setup message received. Send a setup message first with your API key.                                                                                                                  |
+| 2002       | Invalid authorization token.                                                                                                                                                              |
+| 2003       | Invalid authorization credentials for specified agent.                                                                                                                                    |
+| 3001       | Internal failure in audio to text processing.                                                                                                                                             |
+| 3002       | Error generating audio answer.                                                                                                                                                            |
+| 3003       | Error generating answer.                                                                                                                                                                  |
+| 3004       | Error processing response.                                                                                                                                                                |
+| 4429       | You have reached the maximum number of concurrent connections allowed by your current plan. Please consider upgrading your plan or reducing the number of active connections to continue. |
+| 5001       | Unknown error. Please contact support.                                                                                                                                                    |
+
+# Voice Activity Detection (VAD)
+
+If VAD is enabled, you will receive `voiceActivityStart` and `voiceActivityEnd` messages indicating the detection of speech activity in the audio input. These messages help in understanding when the user starts and stops speaking.
+
+---
+
+This documentation covers the essential aspects of interacting with the PlayAI Websocket API for agent conversations. Ensure that your implementation handles the specified message types and follows the outlined protocols for a seamless integration.
